@@ -9,11 +9,14 @@ import mongoose from 'mongoose';
 import { CreateUser } from './dto/create-user.dto';
 import { THEME } from './Theme';
 import * as bcrypt from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
+
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name)
     private userModel: mongoose.Model<User>,
+    private jwtService: JwtService,
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -142,5 +145,28 @@ export class UserService {
       .exec();
 
     return users;
+  }
+
+  async login(
+    nik: string,
+    password: string,
+  ): Promise<{ access_token: string; id: number }> {
+    const userValidateToNik = await this.userModel.findOne({ nik }).exec();
+    if (!userValidateToNik) {
+      throw new ConflictException('Пользователь с таким никнеймом не найден');
+    }
+    const passwordValid = await bcrypt.compare(
+      password,
+      userValidateToNik.password,
+    );
+    if (!passwordValid) {
+      throw new ConflictException('Пользователь с таким паролем не найден');
+    }
+    const payload = { sub: userValidateToNik.id, nik: nik };
+    const access_token = await this.jwtService.signAsync(payload);
+    return {
+      access_token: access_token,
+      id: userValidateToNik?.id,
+    };
   }
 }

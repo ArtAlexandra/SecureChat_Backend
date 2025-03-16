@@ -8,14 +8,17 @@ import {
   Delete,
   Param,
   Patch,
+  UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUser } from './dto/create-user.dto';
+import { AuthGuard } from './auth.guard';
 
 @Controller('users')
 export class UserController {
   constructor(private userService: UserService) {}
 
+  @UseGuards(AuthGuard)
   @Get('/get-all')
   async getAll() {
     try {
@@ -24,6 +27,24 @@ export class UserController {
       throw new HttpException(
         {
           status: HttpStatus.FORBIDDEN,
+          warning: error.message,
+        },
+        HttpStatus.FORBIDDEN,
+        {
+          cause: error,
+        },
+      );
+    }
+  }
+
+  @Post('/login')
+  async login(@Body('nik') nik: string, @Body('password') password: string) {
+    try {
+      return await this.userService.login(nik, password);
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: HttpStatus.CONFLICT,
           warning: error.message,
         },
         HttpStatus.FORBIDDEN,
@@ -52,6 +73,7 @@ export class UserController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Delete('/delete/:id')
   async deleteUser(@Param('id') id: string) {
     try {
@@ -70,6 +92,7 @@ export class UserController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Patch('/update-name/:id')
   async updateName(@Param('id') id: string, @Body('name') name: string) {
     try {
@@ -88,6 +111,7 @@ export class UserController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Patch('/update-nik/:id')
   async updateNik(@Param('id') id: string, @Body('nik') nik: string) {
     try {
@@ -106,6 +130,7 @@ export class UserController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Patch('/update-password/:id')
   async updatePassword(
     @Param('id') id: string,
@@ -127,6 +152,7 @@ export class UserController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Get('/select-nik/:nik')
   async selectUser(@Param('nik') nik: string) {
     try {
@@ -145,6 +171,7 @@ export class UserController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Get('/select-id/:id')
   async selectUserId(@Param('id') id: string) {
     try {
@@ -163,6 +190,7 @@ export class UserController {
     }
   }
 
+  @UseGuards(AuthGuard)
   @Get('/find/:nik')
   async findUsersWithSimilarNik(@Param('nik') nik: string) {
     try {
