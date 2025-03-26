@@ -150,23 +150,27 @@ export class UserService {
   async login(
     nik: string,
     password: string,
-  ): Promise<{ access_token: string; id: number }> {
-    const userValidateToNik = await this.userModel.findOne({ nik }).exec();
-    if (!userValidateToNik) {
+  ): Promise<{ access_token: string; user: { id: string } }> {
+    const user = await this.userModel.findOne({ nik }).exec();
+
+    if (!user) {
       throw new ConflictException('Пользователь с таким никнеймом не найден');
     }
-    const passwordValid = await bcrypt.compare(
-      password,
-      userValidateToNik.password,
-    );
+
+    const passwordValid = await bcrypt.compare(password, user.password);
     if (!passwordValid) {
-      throw new ConflictException('Пользователь с таким паролем не найден');
+      throw new ConflictException('Неверный пароль');
     }
-    const payload = { sub: userValidateToNik.id, nik: nik };
-    const access_token = await this.jwtService.signAsync(payload);
+    const payload = {
+      sub: user._id.toString(),
+      nik: user.nik,
+    };
+
     return {
-      access_token: access_token,
-      id: userValidateToNik?.id,
+      access_token: this.jwtService.sign(payload, { expiresIn: '24h' }),
+      user: {
+        id: user._id.toString(),
+      },
     };
   }
 }

@@ -5,6 +5,9 @@ import type { THEME } from './../Theme';
 })
 export class User {
   @Prop()
+  id: string;
+
+  @Prop()
   name: string;
 
   @Prop()
@@ -18,6 +21,10 @@ export class User {
 
   @Prop()
   lastVisit: Date;
+
+  public get _id(): any {
+    return this.id;
+  }
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
