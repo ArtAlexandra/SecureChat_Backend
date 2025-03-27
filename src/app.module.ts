@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { UserModule } from './user/user.module';
 import { MessagesModule } from './message/messages.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { MessagesModule } from './message/messages.module';
     MongooseModule.forRoot(process.env.DB_URL),
     UserModule,
     MessagesModule,
+    ChatModule,
   ],
   controllers: [],
   providers: [],
