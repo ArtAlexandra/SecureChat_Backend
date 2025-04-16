@@ -14,6 +14,9 @@ export class User {
   nik: string;
 
   @Prop()
+  email: string;
+
+  @Prop()
   password: string;
 
   @Prop()

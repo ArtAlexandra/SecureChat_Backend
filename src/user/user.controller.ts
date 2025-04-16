@@ -55,10 +55,28 @@ export class UserController {
     }
   }
 
-  @Post('/auth')
+  @Post('/auth/create')
   async auth(@Body() data: CreateUser) {
     try {
       return await this.userService.createUser(data);
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: HttpStatus.CONFLICT,
+          warning: error.message,
+        },
+        HttpStatus.FORBIDDEN,
+        {
+          cause: error,
+        },
+      );
+    }
+  }
+
+  @Post('/auth/send-code')
+  async sendCodeByMailSignUp(@Body() data: CreateUser) {
+    try {
+      return await this.userService.sendCodeByMailSignUp(data);
     } catch (error) {
       throw new HttpException(
         {

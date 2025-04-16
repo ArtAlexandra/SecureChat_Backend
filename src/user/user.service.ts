@@ -10,14 +10,36 @@ import { CreateUser } from './dto/create-user.dto';
 import { THEME } from './Theme';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { MailService } from 'src/email/email.service';
 
 @Injectable()
 export class UserService {
+  private codesStorage = new Map<string, { code: string; expiresAt: Date }>();
+
   constructor(
     @InjectModel(User.name)
     private userModel: mongoose.Model<User>,
     private jwtService: JwtService,
+    private mailServive: MailService,
   ) {}
+
+  generateCode(email: string): string {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    this.codesStorage.set(email, { code, expiresAt });
+    return code;
+  }
+
+  verifyCode(email: string, userCode: string): boolean {
+    const record = this.codesStorage.get(email);
+    if (typeof record === 'undefined') return false;
+    const { code, expiresAt } = record;
+    return code === userCode && new Date() < expiresAt;
+  }
+
+  removeCode(email: string): void {
+    this.codesStorage.delete(email);
+  }
 
   async findAll(): Promise<User[]> {
     const users = await this.userModel.find();
@@ -35,7 +57,7 @@ export class UserService {
     return this.userModel.findOne({ ...filter });
   }
 
-  async createUser(data: CreateUser): Promise<User | Error> {
+  async sendCodeByMailSignUp(data: CreateUser): Promise<string | Error> {
     const userValidateToName = await this.userModel
       .findOne({ name: data.name })
       .exec();
@@ -48,10 +70,24 @@ export class UserService {
     if (userValidateToNik) {
       throw new ConflictException('Пользователь с таким ником уже существует');
     }
+    const code = this.generateCode(data.email);
+    const title = 'Подтверждение почты';
+    const text = `Для подтверждения почты введите код: ${code}`;
+    this.mailServive.sendEmail(data.email, title, text);
+    return 'Код подтверждения успешно отправлен на почту';
+  }
+
+  async createUser(data: CreateUser): Promise<User | Error> {
+    const isValidate = await this.verifyCode(data.email, data.code);
+    if (!isValidate) {
+      throw new ConflictException('Неверный код подтверждения');
+    }
+    this.removeCode(data.email);
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = new this.userModel();
     user.name = data.name;
     user.nik = data.nik;
+    user.email = data.email;
     user.password = hashedPassword;
     user.theme = THEME.LIGHT;
     return user.save();
