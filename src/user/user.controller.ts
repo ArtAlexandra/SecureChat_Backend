@@ -37,7 +37,7 @@ export class UserController {
     }
   }
 
-  @Post('/login')
+  @Post('/signin')
   async login(@Body('nik') nik: string, @Body('password') password: string) {
     try {
       return await this.userService.login(nik, password);

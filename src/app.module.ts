@@ -5,6 +5,7 @@ import { UserModule } from './user/user.module';
 import { MessagesModule } from './message/messages.module';
 import { ChatModule } from './chat/chat.module';
 import { MailModule } from './email/email.module';
+import { FileModule } from './file/file.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { MailModule } from './email/email.module';
     MessagesModule,
     ChatModule,
     MailModule,
+    FileModule
   ],
   controllers: [],
   providers: [],
