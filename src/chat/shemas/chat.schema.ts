@@ -1,32 +1,36 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { User } from 'src/user/schemas/user.schemas';
 import { Message } from 'src/message/schemas/message.schema';
 
 export type ChatDocument = Chat & Document;
 @Schema({ timestamps: true })
 export class Chat {
-  @Prop({ type: [User], required: true })
-  participants: Types.ObjectId[]; // Участники чата (ссылки на User)
+
+  @Prop({
+    type: [{
+      type: Types.ObjectId,
+      ref: 'User'
+    }],
+    required: true
+  })
+  participants: Types.ObjectId[];
 
   @Prop({ default: false })
-  isGroup: boolean; // Флаг группового чата
+  isGroup: boolean;
 
   @Prop({ required: false })
-  groupName?: string; // Название группы (если isGroup = true)
+  groupName?: string;
 
   @Prop({ type: [Message], default: [] })
-  messages: Types.ObjectId[]; // Сообщения чата (ссылки на Message)
+  messages: Types.ObjectId[];
 
   @Prop({ type: Message, required: false })
-  lastMessage?: Types.ObjectId; // Последнее сообщение (для сортировки чатов)
+  lastMessage?: Types.ObjectId;
 
-  // Виртуальное поле для количества непрочитанных (вычисляется в сервисе)
   unreadCount?: number;
 }
 
 export const ChatSchema = SchemaFactory.createForClass(Chat);
 
-// Индексы для ускорения поиска
-ChatSchema.index({ participants: 1 }); // Поиск чатов по участнику
-ChatSchema.index({ lastMessage: -1 }); // Сортировка по последнему сообщению
+ChatSchema.index({ participants: 1 });
+ChatSchema.index({ lastMessage: -1 });

@@ -7,6 +7,8 @@ import {
   Query,
   UseGuards,
   Delete,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { CreateChat } from './dto/create-chat.dto';
@@ -29,12 +31,28 @@ export class ChatController {
     @Body() createChatDto: CreateChat,
     @UserDecorator() user: User,
   ) {
-    const userId = user.id;
+
+    try {
+      const userId = user.id;
     return this.chatService.createChat(
       [userId, ...createChatDto.participantIds],
       createChatDto.isGroup,
       createChatDto.groupName,
     );
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: HttpStatus.CONFLICT,
+          warning: error.message,
+        },
+        HttpStatus.CONFLICT,
+        {
+          cause: error,
+        },
+      );
+    }
+
+   
   }
 
   /**
@@ -54,9 +72,9 @@ export class ChatController {
   /**
    * Получить все чаты пользователя
    */
-  @Get('/all-chats/:userId')
+  @Get('/all-chats')
   @UseGuards(AuthGuard)
-  async getUserChats(@Param('userId') user: User) {
+  async getUserChats(@UserDecorator() user: User) {
     const userId = user.id;
     return this.chatService.getUserChats(userId);
   }

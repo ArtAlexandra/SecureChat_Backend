@@ -21,7 +21,7 @@ export class UserService {
     private userModel: mongoose.Model<User>,
     private jwtService: JwtService,
     private mailServive: MailService,
-  ) {}
+  ) { }
 
   generateCode(email: string): string {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
