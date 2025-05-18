@@ -13,6 +13,8 @@ import {
 import { UserService } from './user.service';
 import { CreateUser } from './dto/create-user.dto';
 import { AuthGuard } from './auth.guard';
+import { User } from './schemas/user.schemas';
+import { UserDecorator } from 'src/decorators/user.decorator';
 
 @Controller('users')
 export class UserController {
@@ -149,13 +151,14 @@ export class UserController {
   }
 
   @UseGuards(AuthGuard)
-  @Patch('/update-password/:id')
+  @Patch('/update-password')
   async updatePassword(
-    @Param('id') id: string,
+    @UserDecorator() user: User,
     @Body('password') password: string,
   ) {
     try {
-      return await this.userService.updateUserPassword(id, password);
+      const userId = user.id;
+      return await this.userService.updateUserPassword(userId, password);
     } catch (error) {
       throw new HttpException(
         {
@@ -194,6 +197,28 @@ export class UserController {
   async selectUserId(@Param('id') id: string) {
     try {
       return await this.userService.selectUserById(id);
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: HttpStatus.CONFLICT,
+          warning: error.message,
+        },
+        HttpStatus.FORBIDDEN,
+        {
+          cause: error,
+        },
+      );
+    }
+  }
+
+
+    
+  @UseGuards(AuthGuard)
+  @Get('/me')
+  async getMe(@UserDecorator() user: User) {
+    try {
+      const userId = user.id;
+      return await this.userService.selectUserById(userId);
     } catch (error) {
       throw new HttpException(
         {

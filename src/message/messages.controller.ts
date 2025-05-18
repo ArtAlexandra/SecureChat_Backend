@@ -51,7 +51,7 @@ export class MessagesController {
   }
 
   @Get('/get-message/:userId')
-  async getMessages(@Param('userId') userId: string): Promise<Message[]> {
+  async getMessages(@Param('userId') userId: string): Promise<{ messages: Message[]; unreadCount: number }> {
     return this.messagesService.getMessages(userId);
   }
 

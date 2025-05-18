@@ -31,10 +31,17 @@ export class MessagesService {
     return message.save();
   }
 
-  async getMessages(userId: string): Promise<Message[]> {
-    return this.messageModel
+  async getMessages(userId: string): Promise<{ messages: Message[]; unreadCount: number }> {
+    const messages = await this.messageModel
       .find({ $or: [{ senderId: userId }, { receiverId: userId }] })
       .exec();
+  
+    const unreadCount = await this.messageModel.countDocuments({
+      receiverId: userId,
+      isRead: false,
+    }).exec();
+  
+    return { messages, unreadCount };
   }
 
   async updateMessage(

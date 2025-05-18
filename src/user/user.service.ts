@@ -21,7 +21,7 @@ export class UserService {
     private userModel: mongoose.Model<User>,
     private jwtService: JwtService,
     private mailServive: MailService,
-  ) { }
+  ) {}
 
   generateCode(email: string): string {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -69,6 +69,11 @@ export class UserService {
       .exec();
     if (userValidateToNik) {
       throw new ConflictException('Пользователь с таким ником уже существует');
+    }
+    if(data.password.length < 8) {
+      throw new ConflictException(
+        'Пароль должен состоять минимум из 8 символов',
+      );
     }
     const code = this.generateCode(data.email);
     const title = 'Подтверждение почты';
@@ -138,7 +143,12 @@ export class UserService {
     id: string,
     password: string,
   ): Promise<User | Error> {
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if(password.length < 8) {
+      throw new ConflictException(
+        'Пароль должен состоять минимум из 8 символов',
+      );
+    }
+     const hashedPassword = await bcrypt.hash(password, 10);
     const updatedUser = await this.userModel
       .findByIdAndUpdate(id, { password: hashedPassword }, { new: true })
       .select('-password')

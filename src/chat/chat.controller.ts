@@ -85,11 +85,13 @@ export class ChatController {
   @Get('/messages/:chatId')
   @UseGuards(AuthGuard)
   async getChatMessages(
+    @UserDecorator() user: User,
     @Param('chatId') chatId: string,
     @Query('skip') skip: number = 0,
     @Query('limit') limit: number = 50,
   ) {
-    return this.chatService.getChatMessages(chatId, skip, limit);
+    const userId = user.id;
+    return this.chatService.getChatMessages(chatId, userId, skip, limit);
   }
 
   /**
@@ -117,4 +119,15 @@ export class ChatController {
     const userId = user.id;
     return this.chatService.deleteChat(chatId, userId);
   }
+
+    /**
+   * Получить общее количество непрочитанных чатов
+   */
+    @Get('/unread-chats')
+    @UseGuards(AuthGuard)
+    async getUnreadChatsCount(@UserDecorator() user: User) {
+      const userId = user.id;
+      return this.chatService.getUnreadChatsCount(userId);
+    }
+  
 }

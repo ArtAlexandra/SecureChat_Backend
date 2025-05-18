@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Types } from 'mongoose';
 import { User } from 'src/user/schemas/user.schemas';
@@ -41,22 +45,24 @@ export class ChatService {
       }
 
       if (!isGroup && participantsIds.length !== 2) {
-        throw new ConflictException('Private chat must have exactly 2 participants');
+        throw new ConflictException(
+          'Private chat must have exactly 2 participants',
+        );
       }
       // Преобразование ID в ObjectId
-      const participants = participantsIds.map(id => {
+      const participants = participantsIds.map((id) => {
         try {
           return new Types.ObjectId(id);
-        } catch (error) {
+        } catch {
           throw new ConflictException(`Invalid user ID: ${id}`);
         }
       });
 
-    const existingChat = await this.chatModel.findOne({
-      participants: { $all: participants },
-    });
-    if(existingChat)  return existingChat;
-  
+      const existingChat = await this.chatModel.findOne({
+        participants: { $all: participants },
+      });
+      if (existingChat) return existingChat;
+
       const newChatData: Partial<Chat> = {
         participants,
         isGroup,
@@ -103,67 +109,97 @@ export class ChatService {
 
   async getUserChats(userId: string): Promise<PopulatedChat[]> {
     try {
-        const userObjectId = new Types.ObjectId(userId);
-        const a = await this.chatModel
-            .find({ participants: userObjectId })
-            console.log(a)
+      const userObjectId = new Types.ObjectId(userId);
 
-        const chats = await this.chatModel
-            .find({ participants: userObjectId })
-            .sort({ updatedAt: -1 })
-            .populate<{ participants: PopulatedUser[] }>({
-                path: "participants",
-                select: "name nik email",
-                match: { _id: { $ne: userObjectId } }
+      const chats = await this.chatModel
+        .find({ participants: userObjectId })
+        .sort({ updatedAt: -1 })
+        .populate<{ participants: PopulatedUser[] }>({
+          path: 'participants',
+          select: 'name nik email',
+          match: { _id: { $ne: userObjectId } },
+        })
+        .populate<{ lastMessage: PopulatedChat['lastMessage'] }>({
+          path: 'lastMessage',
+          select: 'content createdAt',
+        })
+        .lean()
+        .exec();
+
+      const processedChats = await Promise.all(
+        chats.map(async (chat) => {
+          const participantsWithDetails = await Promise.all(
+            chat.participants.map(async (participantId) => {
+              const user = await this.userModel
+                .findOne({ _id: participantId }, { name: 1, nik: 1, email: 1 })
+                .lean()
+                .exec();
+              return user as PopulatedUser;
+            }),
+          );
+
+          const selectedInterlocutor = participantsWithDetails.find(
+            (item) => item && item._id.toString() !== userId,
+          );
+
+          const unreadCount = await this.messageModel
+            .countDocuments({
+              _id: { $in: chat.messages },
+              receiverId: userObjectId,
+              isRead: false,
             })
-            .populate({
-                path: "lastMessage",
-                select: "content createdAt"
-            })
-            .lean<PopulatedChat[]>()
             .exec();
-        const processedChats = await Promise.all(
-            chats.map(async (chat) => {
-                const participantsWithDetails = await Promise.all(
-                    chat.participants.map(async (participantId) => {
-                        const user = await this.userModel.findOne(
-                            { _id: participantId },
-                            { name: 1, nik: 1, email: 1 }
-                        ).lean().exec();
-                        return user || null;
-                    })
-                );
-                const selectedinterlocutor = participantsWithDetails.find((item) => item._id.toString() !== userId);
-                console.log("!!!!!!")
-                console.log(participantsWithDetails)
-                console.log(userId)
-                return {
-                    ...chat,
-                    participants: participantsWithDetails.filter(p => p !== null),
-                    interlocutor: selectedinterlocutor || null
-                } as PopulatedChat;
-            })
-        );
 
-        return processedChats;
+          return {
+            ...chat,
+            participants: participantsWithDetails.filter((p) => p !== null),
+            interlocutor: selectedInterlocutor || null,
+            unreadCount,
+            lastMessage: chat.lastMessage
+              ? {
+                content: chat.lastMessage.content,
+                createdAt: chat.lastMessage.createdAt,
+                _id: chat.lastMessage._id,
+              }
+              : null,
+          } as unknown as PopulatedChat;
+        }),
+      );
+      return processedChats;
     } catch (error) {
-        console.error('Error in getUserChats:', error);
-        throw error;
+      console.error('Error in getUserChats:', error);
+      throw error;
     }
-}
-    
-  
+  }
+
   async getChatMessages(
     chatId: string,
+    userId: string,
     skip: number = 0,
     limit: number = 50,
   ): Promise<Message[]> {
-    const chat = await this.chatModel.findById(chatId);
-    if (!chat) throw new Error('Чат не найден');
+    const chat = await this.chatModel
+      .findById(chatId)
+      .select('messages')
+      .lean()
+      .exec();
+
+    if (!chat) throw new NotFoundException('Чат не найден');
+
+    await this.messageModel
+      .updateMany(
+        {
+          _id: { $in: chat.messages },
+          receiverId: userId,
+          isRead: false,
+        },
+        { $set: { isRead: true } },
+      )
+      .exec();
 
     return this.messageModel
       .find({ _id: { $in: chat.messages } })
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 })
       .skip(skip)
       .limit(limit)
       .populate('senderId', 'name nik')
@@ -182,14 +218,34 @@ export class ChatService {
       })
       .sort({ createdAt: -1 });
 
-    return lastReadMessage ? 1 : 0; // Упрощённый пример (реализуйте логику под вашу схему)
+    return lastReadMessage ? 1 : 0;
+  }
+
+  async getUnreadChatsCount(userId: string): Promise<number> {
+    const result = await this.messageModel.aggregate([
+      {
+        $match: {
+          receiverId: userId,
+          isRead: false
+        }
+      },
+      {
+        $group: {
+          _id: "$chatId",
+        }
+      },
+      {
+        $count: "unreadChats"
+      }
+    ]).exec();
+
+    return result[0]?.unreadChats || 0;
   }
 
   async deleteChat(chatId: string, userId: string): Promise<void> {
-    // 1. Проверяем существование чата
     const chat = await this.chatModel.findOne({
       _id: new Types.ObjectId(chatId),
-      participants: new Types.ObjectId(userId), // Пользователь должен быть участником
+      participants: new Types.ObjectId(userId),
     });
 
     if (!chat) {
@@ -198,12 +254,10 @@ export class ChatService {
       );
     }
 
-    // 2. Удаляем все сообщения чата
     await this.messageModel.deleteMany({
       _id: { $in: chat.messages },
     });
 
-    // 3. Удаляем сам чат
     await this.chatModel.deleteOne({ _id: chat._id });
   }
 }

@@ -10,15 +10,16 @@ export interface PopulatedUser {
 export interface PopulatedChat {
     _id: Types.ObjectId;
     participants: PopulatedUser[];
-    isGroup: boolean;
-    groupName?: string;
     messages: Types.ObjectId[];
-    lastMessage?: {
-        content: string;
-        createdAt: Date;
+    lastMessage: {
+      content: string;
+      createdAt: Date;
+      _id: Types.ObjectId;
     };
+    unreadCount: number;
+    interlocutor: PopulatedUser | null;
     createdAt: Date;
     updatedAt: Date;
-    __v?: number;
-    interlocutor: PopulatedUser;
-};
+    __v: number;
+  };
+  

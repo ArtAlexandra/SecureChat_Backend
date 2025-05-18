@@ -18,6 +18,11 @@ export class Message {
 
   @Prop({ default: Date.now })
   createdAt: Date;
+
+  @Prop({default: false})
+  isRead: boolean;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
+MessageSchema.index({ receiverId: 1, isRead: 1 });
+MessageSchema.index({ _id: 1, receiverId: 1, isRead: 1 });
