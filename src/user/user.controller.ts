@@ -9,16 +9,38 @@ import {
   Param,
   Patch,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+
 import { UserService } from './user.service';
 import { CreateUser } from './dto/create-user.dto';
 import { AuthGuard } from './auth.guard';
 import { User } from './schemas/user.schemas';
 import { UserDecorator } from 'src/decorators/user.decorator';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { FileInterceptor } from '@nestjs/platform-express';
 
+export const multerOptions = {
+  storage: diskStorage({
+    destination: './uploads',
+    filename: (req, file, callback) => {
+      console.log(file)
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const ext = extname(file.originalname);
+      const filename = `${uniqueSuffix}${ext}`;
+      callback(null, filename);
+    },
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1
+  }
+};
 @Controller('users')
 export class UserController {
-  constructor(private userService: UserService) {}
+  constructor(private userService: UserService) { }
 
   @UseGuards(AuthGuard)
   @Get('/get-all')
@@ -173,6 +195,32 @@ export class UserController {
     }
   }
 
+
+  @UseGuards(AuthGuard)
+  @Patch('/update-image')
+  @UseInterceptors(FileInterceptor('file', multerOptions))
+  async updateImage(
+    @UploadedFile() file: Express.Multer.File,
+    @UserDecorator() user: User,
+  ) {
+    try {
+      const fileUrl = file ? `/uploads/${file.filename}` : undefined;
+      const userId = user.id;
+      return await this.userService.updateUserImage(userId, fileUrl);
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: HttpStatus.CONFLICT,
+          warning: error.message,
+        },
+        HttpStatus.FORBIDDEN,
+        {
+          cause: error,
+        },
+      );
+    }
+  }
+
   @UseGuards(AuthGuard)
   @Get('/select-nik/:nik')
   async selectUser(@Param('nik') nik: string) {
@@ -212,7 +260,7 @@ export class UserController {
   }
 
 
-    
+
   @UseGuards(AuthGuard)
   @Get('/me')
   async getMe(@UserDecorator() user: User) {

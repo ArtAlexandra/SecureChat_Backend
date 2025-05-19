@@ -25,6 +25,9 @@ export class User {
   @Prop()
   lastVisit: Date;
 
+  @Prop()
+  image: string;
+
   public get _id(): any {
     return this.id;
   }

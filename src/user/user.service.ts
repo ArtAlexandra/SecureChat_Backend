@@ -21,7 +21,7 @@ export class UserService {
     private userModel: mongoose.Model<User>,
     private jwtService: JwtService,
     private mailServive: MailService,
-  ) {}
+  ) { }
 
   generateCode(email: string): string {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -70,7 +70,7 @@ export class UserService {
     if (userValidateToNik) {
       throw new ConflictException('Пользователь с таким ником уже существует');
     }
-    if(data.password.length < 8) {
+    if (data.password.length < 8) {
       throw new ConflictException(
         'Пароль должен состоять минимум из 8 символов',
       );
@@ -95,6 +95,7 @@ export class UserService {
     user.email = data.email;
     user.password = hashedPassword;
     user.theme = THEME.LIGHT;
+    user.image = '/uploads/defaultLogo.jpg';
     return user.save();
   }
 
@@ -139,16 +140,32 @@ export class UserService {
     return updatedUser;
   }
 
+  async updateUserImage(id: string, fileUrl: string): Promise<User | Error> {
+    const userValidateToName = await this.userModel.findById(id);
+    console.log(userValidateToName)
+    if (!userValidateToName) {
+      throw new ConflictException(
+        'Пользователь с таким id не существует',
+      );
+    }
+
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(id, { image: fileUrl }, { new: true })
+      .select('-password')
+      .exec();
+    return updatedUser;
+  }
+
   async updateUserPassword(
     id: string,
     password: string,
   ): Promise<User | Error> {
-    if(password.length < 8) {
+    if (password.length < 8) {
       throw new ConflictException(
         'Пароль должен состоять минимум из 8 символов',
       );
     }
-     const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
     const updatedUser = await this.userModel
       .findByIdAndUpdate(id, { password: hashedPassword }, { new: true })
       .select('-password')

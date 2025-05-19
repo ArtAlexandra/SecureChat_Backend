@@ -4,6 +4,7 @@ export interface PopulatedUser {
     _id: Types.ObjectId;
     nik: string;
     email: string;
+    image: string;
 };
 
 

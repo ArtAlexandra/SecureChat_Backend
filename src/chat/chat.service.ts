@@ -116,7 +116,7 @@ export class ChatService {
         .sort({ updatedAt: -1 })
         .populate<{ participants: PopulatedUser[] }>({
           path: 'participants',
-          select: 'name nik email',
+          select: 'name nik email image',
           match: { _id: { $ne: userObjectId } },
         })
         .populate<{ lastMessage: PopulatedChat['lastMessage'] }>({
@@ -125,13 +125,12 @@ export class ChatService {
         })
         .lean()
         .exec();
-
       const processedChats = await Promise.all(
         chats.map(async (chat) => {
           const participantsWithDetails = await Promise.all(
             chat.participants.map(async (participantId) => {
               const user = await this.userModel
-                .findOne({ _id: participantId }, { name: 1, nik: 1, email: 1 })
+                .findOne({ _id: participantId }, { name: 1, nik: 1, email: 1, image: 1 })
                 .lean()
                 .exec();
               return user as PopulatedUser;
