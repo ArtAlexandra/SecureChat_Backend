@@ -9,6 +9,7 @@ import { User } from 'src/user/schemas/user.schemas';
 import { Chat } from './shemas/chat.schema';
 import { Message } from 'src/message/schemas/message.schema';
 import { PopulatedChat, PopulatedUser } from './interfaces/populated';
+import { IInfoChat } from './interfaces/infoChat';
 
 @Injectable()
 export class ChatService {
@@ -87,19 +88,17 @@ export class ChatService {
     const chat = await this.chatModel.findById(chatId);
     if (!chat) throw new Error('Чат не найден');
 
-    // Создаём сообщение
     const message = new this.messageModel({
       senderId: new Types.ObjectId(senderId),
-      receiverId: chat.isGroup
-        ? null
-        : chat.participants.find((id) => !id.equals(senderId)),
+      receiverId: chat.participants.find((id) => !id.equals(senderId)),
       content,
       fileUrl,
+      chat: chatId,
+      readBy: [new Types.ObjectId(senderId)],
     });
 
     await message.save();
 
-    // Обновляем чат
     chat.messages.push(message._id);
     chat.lastMessage = message._id;
     await chat.save();
@@ -141,19 +140,17 @@ export class ChatService {
             (item) => item && item._id.toString() !== userId,
           );
 
-          const unreadCount = await this.messageModel
-            .countDocuments({
-              _id: { $in: chat.messages },
-              receiverId: userObjectId,
-              isRead: false,
-            })
-            .exec();
-
+          const unreadCount = await this.messageModel.countDocuments({
+            _id: { $in: chat.messages },
+            readBy: { $nin: [new Types.ObjectId(userId)] }
+          });
           return {
             ...chat,
             participants: participantsWithDetails.filter((p) => p !== null),
             interlocutor: selectedInterlocutor || null,
             unreadCount,
+            isGroup: chat.isGroup,
+            groupName: chat.groupName,
             lastMessage: chat.lastMessage
               ? {
                 content: chat.lastMessage.content,
@@ -171,6 +168,29 @@ export class ChatService {
     }
   }
 
+  async getChatById(userId: string, chatId: string): Promise<IInfoChat> {
+    const chat = await this.chatModel.findById(chatId);
+
+
+    let users: User[] = [];
+
+    for (let i = 0; i < chat.participants.length; i++) {
+      const user = await this.userModel.findById(chat.participants[i]);
+      users.push(user);
+    }
+
+    const interlocutors = users.filter(
+      (item) => item && item._id.toString() !== userId
+    );
+
+    return {
+      _id: chat._id,
+      logo: chat.isGroup ? '' : interlocutors[0].image,
+      title: chat.isGroup ? chat.groupName : interlocutors[0].nik,
+      participants: chat.isGroup ? users : interlocutors
+    };
+  }
+
   async getChatMessages(
     chatId: string,
     userId: string,
@@ -185,16 +205,13 @@ export class ChatService {
 
     if (!chat) throw new NotFoundException('Чат не найден');
 
-    await this.messageModel
-      .updateMany(
-        {
-          _id: { $in: chat.messages },
-          receiverId: userId,
-          isRead: false,
-        },
-        { $set: { isRead: true } },
-      )
-      .exec();
+    await this.messageModel.updateMany(
+      {
+        _id: { $in: chat.messages },
+        readBy: { $nin: [new Types.ObjectId(userId)] }
+      },
+      { $addToSet: { readBy: new Types.ObjectId(userId) } }
+    ).exec();
 
     return this.messageModel
       .find({ _id: { $in: chat.messages } })

@@ -9,6 +9,8 @@ import {
   Delete,
   HttpException,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { CreateChat } from './dto/create-chat.dto';
@@ -16,11 +18,26 @@ import { CreateMessage } from 'src/message/dto/create-message.dto';
 import { AuthGuard } from '../user/auth.guard';
 import { UserDecorator } from 'src/decorators/user.decorator';
 import { User } from 'src/user/schemas/user.schemas';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { FileInterceptor } from '@nestjs/platform-express';
+
+export const multerOptions = {
+  storage: diskStorage({
+    destination: './uploads',
+    filename: (req, file, callback) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const ext = extname(file.originalname);
+      const filename = `${uniqueSuffix}${ext}`;
+      callback(null, filename);
+    },
+  }),
+};
 
 @Controller('chats')
 @UseGuards(AuthGuard) // Защищаем все роуты контроллера
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly chatService: ChatService) { }
 
   /**
    * Создать новый чат (личный или групповой)
@@ -34,11 +51,11 @@ export class ChatController {
 
     try {
       const userId = user.id;
-    return this.chatService.createChat(
-      [userId, ...createChatDto.participantIds],
-      createChatDto.isGroup,
-      createChatDto.groupName,
-    );
+      return this.chatService.createChat(
+        [userId, ...createChatDto.participantIds],
+        createChatDto.isGroup,
+        createChatDto.groupName,
+      );
     } catch (error) {
       throw new HttpException(
         {
@@ -52,7 +69,7 @@ export class ChatController {
       );
     }
 
-   
+
   }
 
   /**
@@ -60,13 +77,28 @@ export class ChatController {
    */
   @Post('/send-messages/:chatId')
   @UseGuards(AuthGuard)
+  @UseInterceptors(FileInterceptor('file', multerOptions))
   async sendMessage(
     @Param('chatId') chatId: string,
     @Body() sendMessageDto: CreateMessage,
+    @UploadedFile() file: Express.Multer.File,
     @UserDecorator() user: User,
   ) {
+    const fileUrl = file ? `/uploads/${file.filename}` : undefined;
     const userId = user.id;
-    return this.chatService.sendMessage(chatId, userId, sendMessageDto.content);
+    return this.chatService.sendMessage(chatId, userId, sendMessageDto.content, fileUrl);
+  }
+
+  /**
+  * Получить чат по id
+  */
+  @Get('/chat-by-id/:chatId')
+  @UseGuards(AuthGuard)
+  async getChatById(
+    @Param('chatId') chatId: string,
+    @UserDecorator() user: User) {
+    const userId = user.id;
+    return this.chatService.getChatById(userId, chatId);
   }
 
   /**
@@ -120,14 +152,14 @@ export class ChatController {
     return this.chatService.deleteChat(chatId, userId);
   }
 
-    /**
-   * Получить общее количество непрочитанных чатов
-   */
-    @Get('/unread-chats')
-    @UseGuards(AuthGuard)
-    async getUnreadChatsCount(@UserDecorator() user: User) {
-      const userId = user.id;
-      return this.chatService.getUnreadChatsCount(userId);
-    }
-  
+  /**
+ * Получить общее количество непрочитанных чатов
+ */
+  @Get('/unread-chats')
+  @UseGuards(AuthGuard)
+  async getUnreadChatsCount(@UserDecorator() user: User) {
+    const userId = user.id;
+    return this.chatService.getUnreadChatsCount(userId);
+  }
+
 }

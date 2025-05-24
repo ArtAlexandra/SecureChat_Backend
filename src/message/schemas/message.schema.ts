@@ -1,4 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Types } from 'mongoose';
 
 @Schema({
   timestamps: true,
@@ -21,6 +22,15 @@ export class Message {
 
   @Prop({default: false})
   isRead: boolean;
+
+  @Prop({ 
+    type: [{ 
+      type: Types.ObjectId,
+      ref: 'User' 
+    }], 
+    default: [] 
+  })
+  readBy: Types.ObjectId[];
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
