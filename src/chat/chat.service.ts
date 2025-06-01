@@ -37,7 +37,6 @@ export class ChatService {
     groupName?: string,
     fileUrl?: string,
   ): Promise<Chat> {
-    console.log(fileUrl)
     try {
       // Валидация параметров
       if (!participantsIds || participantsIds.length < 2) {
@@ -206,7 +205,6 @@ export class ChatService {
     if (!chat) {
       throw new ConflictException('Чат не найден');
     }
-    console.log(chatInfo)
     const updateData: Partial<IInfoChat> = {};
     updateData.title = chatInfo.title || chat.groupName;
     updateData.logo = file || chat.fileUrl;
