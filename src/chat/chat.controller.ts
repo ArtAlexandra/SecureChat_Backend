@@ -11,6 +11,7 @@ import {
   HttpStatus,
   UseInterceptors,
   UploadedFile,
+  Patch,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { CreateChat } from './dto/create-chat.dto';
@@ -21,6 +22,7 @@ import { User } from 'src/user/schemas/user.schemas';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { IChangeInfoChat, IInfoChat } from './interfaces/infoChat';
 
 export const multerOptions = {
   storage: diskStorage({
@@ -35,7 +37,7 @@ export const multerOptions = {
 };
 
 @Controller('chats')
-@UseGuards(AuthGuard) // Защищаем все роуты контроллера
+@UseGuards(AuthGuard)
 export class ChatController {
   constructor(private readonly chatService: ChatService) { }
 
@@ -44,17 +46,21 @@ export class ChatController {
    */
   @Post('/create-chat')
   @UseGuards(AuthGuard)
+  @UseInterceptors(FileInterceptor('file', multerOptions))
   async createChat(
     @Body() createChatDto: CreateChat,
     @UserDecorator() user: User,
+    @UploadedFile() file: Express.Multer.File,
   ) {
 
     try {
+      const fileUrl = file ? `/uploads/${file.filename}` : undefined;
       const userId = user.id;
       return this.chatService.createChat(
         [userId, ...createChatDto.participantIds],
         createChatDto.isGroup,
         createChatDto.groupName,
+        fileUrl
       );
     } catch (error) {
       throw new HttpException(
@@ -99,6 +105,22 @@ export class ChatController {
     @UserDecorator() user: User) {
     const userId = user.id;
     return this.chatService.getChatById(userId, chatId);
+  }
+
+
+  /**
+* Получить чат по id
+*/
+  @Patch('/chat-by-id/:chatId')
+  @UseGuards(AuthGuard)
+  @UseInterceptors(FileInterceptor('file', multerOptions))
+  async changeChatById(
+    @Param('chatId') chatId: string,
+    @Body() infoChat: IChangeInfoChat,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const fileUrl = file ? `/uploads/${file.filename}` : undefined;
+    return this.chatService.changeChatById(chatId, infoChat, fileUrl);
   }
 
   /**

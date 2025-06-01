@@ -27,6 +27,9 @@ export class Chat {
   @Prop({ type: Message, required: false })
   lastMessage?: Types.ObjectId;
 
+  @Prop()
+  fileUrl: string;
+  
   unreadCount?: number;
 }
 

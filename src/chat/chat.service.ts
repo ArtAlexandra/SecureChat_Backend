@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,7 +10,7 @@ import { User } from 'src/user/schemas/user.schemas';
 import { Chat } from './shemas/chat.schema';
 import { Message } from 'src/message/schemas/message.schema';
 import { PopulatedChat, PopulatedUser } from './interfaces/populated';
-import { IInfoChat } from './interfaces/infoChat';
+import { IChangeInfoChat, IInfoChat } from './interfaces/infoChat';
 
 @Injectable()
 export class ChatService {
@@ -34,7 +35,9 @@ export class ChatService {
     participantsIds: string[],
     isGroup: boolean = false,
     groupName?: string,
+    fileUrl?: string,
   ): Promise<Chat> {
+    console.log(fileUrl)
     try {
       // Валидация параметров
       if (!participantsIds || participantsIds.length < 2) {
@@ -58,7 +61,6 @@ export class ChatService {
           throw new ConflictException(`Invalid user ID: ${id}`);
         }
       });
-
       const existingChat = await this.chatModel.findOne({
         participants: { $all: participants },
       });
@@ -67,6 +69,7 @@ export class ChatService {
       const newChatData: Partial<Chat> = {
         participants,
         isGroup,
+        fileUrl,
         ...(isGroup && { groupName }),
       };
 
@@ -115,7 +118,7 @@ export class ChatService {
         .sort({ updatedAt: -1 })
         .populate<{ participants: PopulatedUser[] }>({
           path: 'participants',
-          select: 'name nik email image',
+          select: 'name nik email image fileUrl',
           match: { _id: { $ne: userObjectId } },
         })
         .populate<{ lastMessage: PopulatedChat['lastMessage'] }>({
@@ -129,7 +132,10 @@ export class ChatService {
           const participantsWithDetails = await Promise.all(
             chat.participants.map(async (participantId) => {
               const user = await this.userModel
-                .findOne({ _id: participantId }, { name: 1, nik: 1, email: 1, image: 1 })
+                .findOne(
+                  { _id: participantId },
+                  { name: 1, nik: 1, email: 1, image: 1 },
+                )
                 .lean()
                 .exec();
               return user as PopulatedUser;
@@ -142,7 +148,7 @@ export class ChatService {
 
           const unreadCount = await this.messageModel.countDocuments({
             _id: { $in: chat.messages },
-            readBy: { $nin: [new Types.ObjectId(userId)] }
+            readBy: { $nin: [new Types.ObjectId(userId)] },
           });
           return {
             ...chat,
@@ -151,6 +157,7 @@ export class ChatService {
             unreadCount,
             isGroup: chat.isGroup,
             groupName: chat.groupName,
+            fileUrl: chat?.fileUrl,
             lastMessage: chat.lastMessage
               ? {
                 content: chat.lastMessage.content,
@@ -171,8 +178,7 @@ export class ChatService {
   async getChatById(userId: string, chatId: string): Promise<IInfoChat> {
     const chat = await this.chatModel.findById(chatId);
 
-
-    let users: User[] = [];
+    const users: User[] = [];
 
     for (let i = 0; i < chat.participants.length; i++) {
       const user = await this.userModel.findById(chat.participants[i]);
@@ -180,16 +186,48 @@ export class ChatService {
     }
 
     const interlocutors = users.filter(
-      (item) => item && item._id.toString() !== userId
+      (item) => item && item._id.toString() !== userId,
     );
 
     return {
       _id: chat._id,
-      logo: chat.isGroup ? '' : interlocutors[0].image,
+      logo: chat.isGroup ? chat.fileUrl : interlocutors[0].image,
       title: chat.isGroup ? chat.groupName : interlocutors[0].nik,
-      participants: chat.isGroup ? users : interlocutors
+      participants: chat.isGroup ? users : interlocutors,
     };
   }
+
+  async changeChatById(
+    chatId: string,
+    chatInfo: Partial<IChangeInfoChat>,
+    file?: string
+  ): Promise<void> {
+    const chat = await this.chatModel.findById(chatId);
+    if (!chat) {
+      throw new ConflictException('Чат не найден');
+    }
+    console.log(chatInfo)
+    const updateData: Partial<IInfoChat> = {};
+    updateData.title = chatInfo.title || chat.groupName;
+    updateData.logo = file || chat.fileUrl;
+    const users = chatInfo.participantIds ? chatInfo.participantIds.map(id => new Types.ObjectId(id)) : chat.participants;
+    await this.chatModel.updateOne(
+      { _id: chatId },
+      {
+        $set: {
+          groupName: updateData.title,
+          fileUrl: updateData.logo,
+          participants: users
+        }
+      },
+      { runValidators: true }
+    );
+    const updatedChat = await this.chatModel.findById(chatId).lean();
+    if (!updatedChat) {
+      throw new ConflictException('Не удалось обновить чат');
+    }
+  }
+
 
   async getChatMessages(
     chatId: string,
@@ -205,13 +243,15 @@ export class ChatService {
 
     if (!chat) throw new NotFoundException('Чат не найден');
 
-    await this.messageModel.updateMany(
-      {
-        _id: { $in: chat.messages },
-        readBy: { $nin: [new Types.ObjectId(userId)] }
-      },
-      { $addToSet: { readBy: new Types.ObjectId(userId) } }
-    ).exec();
+    await this.messageModel
+      .updateMany(
+        {
+          _id: { $in: chat.messages },
+          readBy: { $nin: [new Types.ObjectId(userId)] },
+        },
+        { $addToSet: { readBy: new Types.ObjectId(userId) } },
+      )
+      .exec();
 
     return this.messageModel
       .find({ _id: { $in: chat.messages } })
@@ -238,22 +278,24 @@ export class ChatService {
   }
 
   async getUnreadChatsCount(userId: string): Promise<number> {
-    const result = await this.messageModel.aggregate([
-      {
-        $match: {
-          receiverId: userId,
-          isRead: false
-        }
-      },
-      {
-        $group: {
-          _id: "$chatId",
-        }
-      },
-      {
-        $count: "unreadChats"
-      }
-    ]).exec();
+    const result = await this.messageModel
+      .aggregate([
+        {
+          $match: {
+            receiverId: userId,
+            isRead: false,
+          },
+        },
+        {
+          $group: {
+            _id: '$chatId',
+          },
+        },
+        {
+          $count: 'unreadChats',
+        },
+      ])
+      .exec();
 
     return result[0]?.unreadChats || 0;
   }

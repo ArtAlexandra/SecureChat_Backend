@@ -10,7 +10,7 @@ import { CreateUser } from './dto/create-user.dto';
 import { THEME } from './Theme';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { MailService } from 'src/email/email.service';
+import { MailService } from '../email/email.service';
 
 @Injectable()
 export class UserService {
