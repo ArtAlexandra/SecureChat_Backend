@@ -200,9 +200,8 @@ export class UserService {
   }
 
   async findUsersWithSimilarNik(nik: string): Promise<User[]> {
-    const regex = new RegExp(nik, 'i');
     const users = await this.userModel
-      .find({ name: { $regex: regex } })
+      .find({ nik })
       .select('name nik')
       .limit(10)
       .exec();
